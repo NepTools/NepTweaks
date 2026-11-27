@@ -10,6 +10,8 @@ A collection of patches for Hyperdimension Neptunia U: Action Unleashed (PSVita 
 
 - Retire in any quest
 
+- Use any character in any quest
+
 ## How to apply the patch
 
 1. Run ```pip install -r requirements.txt```

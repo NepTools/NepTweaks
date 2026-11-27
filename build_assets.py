@@ -88,6 +88,8 @@ JOBS = [
                          (160, 80, 240, 255), baseline=24, center=131)),
     (9, 2, lambda: label('Retire Anytime', 27, (256, 32), (244, 244, 244, 255),
                          (160, 80, 240, 255), baseline=24, center=131)),
+    (9, 3, lambda: label('Any Character', 27, (256, 32), (244, 244, 244, 255),
+                         (160, 80, 240, 255), baseline=24, center=131)),
 ]
 ORIG_SIZE = 1453504
 

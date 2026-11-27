@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys
+import struct, sys
 from keystone import Ks, KS_ARCH_ARM, KS_MODE_THUMB
 
 BASE, FOFF = 0x81000000, 0xE0
@@ -15,13 +15,32 @@ GATE = 0x81094E90
 FPS_THRESHOLD = 0x81094EA4
 FPS_VBLANK = 0x81094EB8
 REGION_END = 0x81094ECE
+ANY_CHARA = 0x8105CE58
+ANY_CHARA_END = 0x8105CE9E
 
 PATCHES = [
-    ("IsCheatOwned: rows 0-2 always owned", 0x8105CE12, "002801db052801dd", None,
-     """cmp r0, #2
-        bls #0x8105ce84
-        cmp r0, #5
-        bls #0x8105ce1e"""),
+    ("IsCheatOwned: rows 0-3 always owned", 0x8105CE0E, "2de9f041002801db052801dd", 0x8105CE18,
+     """cmp r0, #3
+        ite ls
+        movls r0, #1
+        movhi r0, #0
+        bx lr"""),
+
+    ("Any character: option helper", ANY_CHARA, None, ANY_CHARA_END,
+     """ands r1, r2
+        bne yes
+        movs r0, #3
+        bl #0x8105cec2
+        cbz r0, no
+     yes:
+        movs r0, #1
+        pop {r4, pc}
+     no:
+        pop {r4, pc}"""),
+
+    ("Any character: quest roster check", 0x81064B6A, "096e114000d0", None,
+     """ldr r1, [r1, #0x60]
+        b.w #%#x""" % ANY_CHARA),
 
     ("GetCheat: disable all cheat effects", 0x8105CEB6, "002801db", None,
      """movs r0, #0
@@ -101,8 +120,37 @@ PATCHES = [
         nop""" % FPS_VBLANK),
 ]
 
+def reloc_sites(d):
+    ph = struct.unpack_from('<I', d, 0x1c)[0]
+    phnum = struct.unpack_from('<H', d, 0x2c)[0]
+    sites = set()
+    for i in range(phnum):
+        p = struct.unpack_from('<8I', d, ph + 32 * i)
+        if p[0] != 0x60000000:
+            continue
+        b = d[p[1]:p[1] + p[4]]
+        pos = 0
+        while pos + 8 <= len(b):
+            w0 = struct.unpack_from('<I', b, pos)[0]
+            if w0 & 0xf == 0:
+                offset = struct.unpack_from('<I', b, pos + 8)[0]
+                if (w0 >> 16) & 0xf == 0:
+                    sites.add(offset)
+                    if (w0 >> 20) & 0xff:
+                        sites.add(offset + ((w0 >> 28) & 0xf) * 2)
+                pos += 12
+            elif w0 & 0xf == 1:
+                w1 = struct.unpack_from('<I', b, pos + 4)[0]
+                if (w0 >> 16) & 0xf == 0:
+                    sites.add((w0 >> 20) | ((w1 & 0xfffff) << 12))
+                pos += 8
+            else:
+                sys.exit(f'unknown relocation format {w0 & 0xf}')
+    return {BASE + x for x in sites}
+
 def main(src, dst):
     d = bytearray(open(src, 'rb').read())
+    relocs = reloc_sites(d)
     for name, va, expect, end, code in PATCHES:
         fo = va - BASE + FOFF
         b = asm(code, va)
@@ -115,6 +163,9 @@ def main(src, dst):
             got = bytes(d[fo:fo + len(exp)])
             if got != exp:
                 sys.exit(f'{name}: unexpected original bytes {got.hex()} (wrong eboot version?)')
+        hit = sorted(r for r in relocs if va - 3 <= r < va + len(b))
+        if hit:
+            sys.exit(f'{name}: overlaps relocated code at ' + ', '.join(f'{r:#x}' for r in hit))
         d[fo:fo + len(b)] = b
         print(f'{name:40s} @ {va:#x}  {len(b)} bytes')
     open(dst, 'wb').write(d)

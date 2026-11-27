@@ -13,7 +13,7 @@ TEXTS = {
     139: ("Negate any stagger or knock back effects from enemy attacks.",
           "You can retire in any quest now (^o^)"),
     140: ("Defeat any and all enemies with a single hit.",
-          "Reserved for a future NepTweaks option <3"),
+          "Take whoever u want into any quest, no more forced party picks!"),
     141: ("The EXE Drive gauge will always be filled.",
           "Reserved for a future NepTweaks option <3"),
     142: ("The SP gauge will always be filled.",
